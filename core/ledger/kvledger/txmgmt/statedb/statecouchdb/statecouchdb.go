@@ -520,8 +520,14 @@ func (scanner *queryScanner) getNextStateRangeScanResults() error {
 		return err
 	}
 	scanner.resultsInfo.results = queryResult
-	scanner.queryDefinition.startKey = nextStartKey
 	scanner.paginationInfo.cursor = 0
+	if scanner.queryDefinition.endKey == nextStartKey {
+		// as we always set inclusive_end=false to match the behavior of
+		// goleveldb iterator, it is safe to mark the scanner as exhausted
+		scanner.exhausted = true
+		// we still need to update the startKey as it is returned as bookmark
+	}
+	scanner.queryDefinition.startKey = nextStartKey
 	return nil
 }
 
@@ -846,11 +852,10 @@ func applyAdditionalQueryOptions(queryString string, queryLimit int32, queryBook
 		return "", err
 	}
 	if fieldsJSONArray, ok := jsonQueryMap[jsonQueryFields]; ok {
-		switch fieldsJSONArray.(type) {
+		switch fieldsJSONArray := fieldsJSONArray.(type) {
 		case []interface{}:
 			//Add the "_id", and "version" fields,  these are needed by default
-			jsonQueryMap[jsonQueryFields] = append(fieldsJSONArray.([]interface{}),
-				idField, versionField)
+			jsonQueryMap[jsonQueryFields] = append(fieldsJSONArray, idField, versionField)
 		default:
 			return "", errors.New("fields definition must be an array")
 		}
@@ -878,6 +883,7 @@ type queryScanner struct {
 	queryDefinition *queryDefinition
 	paginationInfo  *paginationInfo
 	resultsInfo     *resultsInfo
+	exhausted       bool
 }
 
 type queryDefinition struct {
@@ -900,7 +906,7 @@ type resultsInfo struct {
 
 func newQueryScanner(namespace string, db *couchDatabase, query string, internalQueryLimit,
 	limit int32, bookmark, startKey, endKey string) (*queryScanner, error) {
-	scanner := &queryScanner{namespace, db, &queryDefinition{startKey, endKey, query, internalQueryLimit}, &paginationInfo{-1, limit, bookmark}, &resultsInfo{0, nil}}
+	scanner := &queryScanner{namespace, db, &queryDefinition{startKey, endKey, query, internalQueryLimit}, &paginationInfo{-1, limit, bookmark}, &resultsInfo{0, nil}, false}
 	var err error
 	// query is defined, then execute the query and return the records and bookmark
 	if scanner.queryDefinition.query != "" {
@@ -925,6 +931,9 @@ func (scanner *queryScanner) Next() (statedb.QueryResult, error) {
 	// check to see if additional records are needed
 	// requery if the cursor exceeds the internalQueryLimit
 	if scanner.paginationInfo.cursor >= scanner.queryDefinition.internalQueryLimit {
+		if scanner.exhausted {
+			return nil, nil
+		}
 		var err error
 		// query is defined, then execute the query and return the records and bookmark
 		if scanner.queryDefinition.query != "" {
@@ -957,9 +966,7 @@ func (scanner *queryScanner) Next() (statedb.QueryResult, error) {
 		VersionedValue: *kv.VersionedValue}, nil
 }
 
-func (scanner *queryScanner) Close() {
-	scanner = nil
-}
+func (scanner *queryScanner) Close() {}
 
 func (scanner *queryScanner) GetBookmarkAndClose() string {
 	retval := ""

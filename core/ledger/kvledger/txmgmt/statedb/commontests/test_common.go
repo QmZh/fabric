@@ -298,11 +298,11 @@ func TestQuery(t *testing.T, dbProvider statedb.VersionedDBProvider) {
 	assert.Nil(t, queryResult1)
 
 	// query using bad query string
-	itr, err = db.ExecuteQuery("ns1", "this is an invalid query string")
+	_, err = db.ExecuteQuery("ns1", "this is an invalid query string")
 	assert.Error(t, err, "Should have received an error for invalid query string")
 
 	// query returns 0 records
-	itr, err = db.ExecuteQuery("ns1", `{"selector":{"owner":"not_a_valid_name"}}`)
+	_, err = db.ExecuteQuery("ns1", `{"selector":{"owner":"not_a_valid_name"}}`)
 	assert.NoError(t, err)
 
 	// verify no results
@@ -1016,7 +1016,7 @@ func TestFullScanIterator(
 
 	// add the sample data for four namespaces to the db
 	batch := statedb.NewUpdateBatch()
-	for _, kv := range generateSampleData("ns1", "ns2", "ns3", "ns4") {
+	for _, kv := range generateSampleData("", "ns1", "ns2", "ns3", "ns4") {
 		batch.PutValAndMetadata(kv.Namespace, kv.Key, kv.Value, kv.Metadata, kv.Version)
 	}
 	db.ApplyUpdates(batch, version.NewHeight(5, 5))
@@ -1045,7 +1045,7 @@ func TestFullScanIterator(
 			})
 		}
 
-		expectedNamespacesInResults := stringset{"ns1", "ns2", "ns3", "ns4"}.minus(skipNamespaces)
+		expectedNamespacesInResults := stringset{"", "ns1", "ns2", "ns3", "ns4"}.minus(skipNamespaces)
 		expectedResults := []*statedb.VersionedKV{}
 		for _, ns := range expectedNamespacesInResults {
 			expectedResults = append(expectedResults, generateSampleData(ns)...)
@@ -1057,17 +1057,17 @@ func TestFullScanIterator(
 	// skip no namespaces
 	verifyFullScanIterator(stringset{})
 	// skip the first namespace
-	verifyFullScanIterator(stringset{"ns1"})
+	verifyFullScanIterator(stringset{""})
 	// skip the middle namespace
 	verifyFullScanIterator(stringset{"ns2"})
 	// skip the last namespace
 	verifyFullScanIterator(stringset{"ns4"})
 	// skip the first two namespaces
-	verifyFullScanIterator(stringset{"ns1", "ns2"})
+	verifyFullScanIterator(stringset{"", "ns2"})
 	// skip the last two namespaces
 	verifyFullScanIterator(stringset{"ns3", "ns4"})
 	// skip all the namespaces
-	verifyFullScanIterator(stringset{"ns1", "ns2", "ns3", "ns4"})
+	verifyFullScanIterator(stringset{"", "ns1", "ns2", "ns3", "ns4"})
 }
 
 type stringset []string

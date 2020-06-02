@@ -401,6 +401,28 @@ func (r *Registrar) ChannelList() types.ChannelList {
 }
 
 func (r *Registrar) ChannelInfo(channelID string) (types.ChannelInfo, error) {
+	r.lock.RLock()
+	defer r.lock.RUnlock()
+
+	info := types.ChannelInfo{}
+	cs, ok := r.chains[channelID]
+	if !ok {
+		return info, types.ErrChannelNotExist
+	}
+
+	info.Name = channelID
+	info.Height = cs.Height()
+	info.ClusterRelation, info.Status = cs.StatusReport()
+
+	return info, nil
+}
+
+func (r *Registrar) JoinChannel(channelID string, configBlock *cb.Block) (types.ChannelInfo, error) {
 	//TODO
 	return types.ChannelInfo{}, errors.New("Not implemented yet")
+}
+
+func (r *Registrar) RemoveChannel(channelID string, removeStorage bool) error {
+	//TODO
+	return errors.New("Not implemented yet")
 }
